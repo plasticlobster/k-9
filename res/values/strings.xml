@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="app_name">K-9 Mail</string>
+    <string name="app_name">NeoMail</string>
     <string name="beta_app_name">K-9 Mail BETA</string>
-    <string name="app_authors">Google, The K-9 Dog Walkers.</string>
+    <string name="app_authors">Neo Lobster</string>
     <string name="app_copyright_fmt">Copyright 2008-<xliff:g>%s</xliff:g> The K-9 Dog Walkers. Portions Copyright 2006-<xliff:g>%s</xliff:g> the Android Open Source Project.</string>
     <string name="app_license">Licensed under the Apache License, Version 2.0.</string>
     <string name="app_authors_fmt">Authors: <xliff:g id="app_authors">%s</xliff:g></string>
@@ -72,7 +72,7 @@
     <string name="send_messages_action">Send messages</string>
     <string name="list_folders_action">Folder list</string>
     <string name="refresh_folders_action">Refresh folders</string>
-    <string name="mark_all_as_read_action">Mark all messages as read</string>
+    <string name="mark_all_as_read_action">Mark all read</string>
     <string name="add_account_action">Add account</string>
     <string name="compose_action">Compose</string>
     <string name="search_action">Search</string>

@@ -1245,7 +1245,14 @@ public class MessageList
     }
 
     private void onMarkAllAsRead(final Account account, final String folder) {
-        showDialog(DIALOG_MARK_ALL_AS_READ);
+        try {
+            mController.markAllMessagesRead(mAccount, mCurrentFolder.name);
+            for (MessageInfoHolder holder : mAdapter.messages) {
+                holder.read = true;
+            }
+            mHandler.sortMessages();
+        } catch (Exception e) {
+        }
     }
 
     private void onExpunge(final Account account, String folderName) {
