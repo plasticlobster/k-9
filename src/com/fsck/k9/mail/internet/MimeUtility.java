@@ -14,6 +14,7 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.regex.Pattern;
 import java.nio.charset.Charset;
+import java.nio.charset.IllegalCharsetNameException;
 
 
 public class MimeUtility {
@@ -876,7 +877,14 @@ public class MimeUtility {
         { "zmm", "application/vnd.handheld-entertainment+xml"}
     };
 
-
+    /**
+     * Table for MIME type replacements.
+     *
+     * Table format: wrong type, correct type
+     */
+    private static final String[][] MIME_TYPE_REPLACEMENT_MAP = new String[][] {
+        {"image/jpg", "image/jpeg"}
+    };
 
     public static String unfold(String s) {
         if (s == null) {
@@ -1193,6 +1201,46 @@ public class MimeUtility {
         return DEFAULT_ATTACHMENT_MIME_TYPE;
     }
 
+    /**
+     * Convert some wrong MIME types encountered in the wild to canonical MIME
+     * types.
+     *
+     * @param mimeType The original MIME type
+     * @return If {@code mimeType} is known to be wrong the correct MIME type
+     *         is returned. Otherwise the value of {@code mimeType} is returned
+     *         unmodified.
+     *
+     * @see #MIME_TYPE_REPLACEMENT_MAP
+     */
+    public static String canonicalizeMimeType(String mimeType) {
+        for (String[] mimeTypeMapEntry : MIME_TYPE_REPLACEMENT_MAP) {
+            if (mimeTypeMapEntry[0].equals(mimeType)) {
+                return mimeTypeMapEntry[1];
+            }
+        }
+        return mimeType;
+    }
+
+    /**
+     * When viewing the attachment we want the MIME type to be as sensible as
+     * possible. So we fix it up if necessary.
+     *
+     * @param mimeType The original MIME type of the attachment.
+     * @param name The (file)name of the attachment.
+     *
+     * @return The best MIME type we can come up with.
+     */
+    public static String getMimeTypeForViewing(String mimeType, String name) {
+        if (DEFAULT_ATTACHMENT_MIME_TYPE.equalsIgnoreCase(mimeType)) {
+            // If the MIME type is the generic "application/octet-stream"
+            // we try to find a better one by looking at the file extension.
+            return getMimeTypeByExtension(name);
+        } else {
+            // Some messages contain wrong MIME types. See if we know better.
+            return canonicalizeMimeType(mimeType);
+        }
+    }
+
     private static Message getMessageFromPart(Part part) {
         while (part != null) {
             if (part instanceof Message)
@@ -1334,13 +1382,19 @@ public class MimeUtility {
 
         /*
          * See if there is conversion from the MIME charset to the Java one.
+         * this function may also throw an exception if the charset name is not known
          */
-        if (!Charset.isSupported(charset)) {
+        boolean supported;
+        try {
+            supported = Charset.isSupported(charset);
+        } catch (IllegalCharsetNameException e) {
+            supported = false;
+        }
+        if (!supported) {
             Log.e(K9.LOG_TAG, "I don't know how to deal with the charset " + charset +
             ". Falling back to US-ASCII");
             charset = "US-ASCII";
         }
-
         /*
          * Convert and return as new String
          */

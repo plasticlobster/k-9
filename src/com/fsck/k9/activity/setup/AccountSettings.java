@@ -19,6 +19,7 @@ import java.util.List;
 import com.fsck.k9.Account;
 import com.fsck.k9.Account.FolderMode;
 import com.fsck.k9.Account.QuoteStyle;
+import com.fsck.k9.Account.ScrollButtons;
 import com.fsck.k9.K9;
 import com.fsck.k9.NotificationSetting;
 import com.fsck.k9.Preferences;
@@ -87,6 +88,7 @@ public class AccountSettings extends K9PreferenceActivity {
     private static final String PREFERENCE_MESSAGE_FORMAT = "message_format";
     private static final String PREFERENCE_QUOTE_PREFIX = "account_quote_prefix";
     private static final String PREFERENCE_QUOTE_STYLE = "quote_style";
+    private static final String PREFERENCE_DEFAULT_QUOTED_TEXT_SHOWN = "default_quoted_text_shown";
     private static final String PREFERENCE_REPLY_AFTER_QUOTE = "reply_after_quote";
     private static final String PREFERENCE_SYNC_REMOTE_DELETIONS = "account_sync_remote_deletetions";
     private static final String PREFERENCE_CRYPTO_APP = "crypto_app";
@@ -104,6 +106,7 @@ public class AccountSettings extends K9PreferenceActivity {
 
 
     private Account mAccount;
+    private boolean mIsMoveCapable = false;
     private boolean mIsPushCapable = false;
     private boolean mIsExpungeCapable = false;
 
@@ -143,6 +146,7 @@ public class AccountSettings extends K9PreferenceActivity {
     private ListPreference mMessageFormat;
     private ListPreference mQuoteStyle;
     private EditTextPreference mAccountQuotePrefix;
+    private CheckBoxPreference mAccountDefaultQuotedTextShown;
     private CheckBoxPreference mReplyAfterQuote;
     private CheckBoxPreference mSyncRemoteDeletions;
     private CheckBoxPreference mSaveAllHeaders;
@@ -177,6 +181,7 @@ public class AccountSettings extends K9PreferenceActivity {
 
         try {
             final Store store = mAccount.getRemoteStore();
+            mIsMoveCapable = store.isMoveCapable();
             mIsPushCapable = store.isPushCapable();
             mIsExpungeCapable = store.isExpungeCapable();
         } catch (Exception e) {
@@ -222,6 +227,9 @@ public class AccountSettings extends K9PreferenceActivity {
                 return false;
             }
         });
+
+        mAccountDefaultQuotedTextShown = (CheckBoxPreference) findPreference(PREFERENCE_DEFAULT_QUOTED_TEXT_SHOWN);
+        mAccountDefaultQuotedTextShown.setChecked(mAccount.isDefaultQuotedTextShown());
 
         mReplyAfterQuote = (CheckBoxPreference) findPreference(PREFERENCE_REPLY_AFTER_QUOTE);
         mReplyAfterQuote.setChecked(mAccount.isReplyAfterQuote());
@@ -421,9 +429,11 @@ public class AccountSettings extends K9PreferenceActivity {
         });
 
         mAccountEnableMoveButtons = (CheckBoxPreference) findPreference(PREFERENCE_ENABLE_MOVE_BUTTONS);
+        mAccountEnableMoveButtons.setEnabled(mIsMoveCapable);
         mAccountEnableMoveButtons.setChecked(mAccount.getEnableMoveButtons());
 
         mAccountScrollMoveButtons = (ListPreference) findPreference(PREFERENCE_HIDE_MOVE_BUTTONS);
+        mAccountScrollMoveButtons.setEnabled(mIsMoveCapable);
         mAccountScrollMoveButtons.setValue("" + mAccount.getScrollMessageViewMoveButtons());
         mAccountScrollMoveButtons.setSummary(mAccountScrollMoveButtons.getEntry());
         mAccountScrollMoveButtons.setOnPreferenceChangeListener(new Preference.OnPreferenceChangeListener() {
@@ -690,12 +700,19 @@ public class AccountSettings extends K9PreferenceActivity {
         mAccount.setMessageFormat(Account.MessageFormat.valueOf(mMessageFormat.getValue()));
         mAccount.setQuoteStyle(QuoteStyle.valueOf(mQuoteStyle.getValue()));
         mAccount.setQuotePrefix(mAccountQuotePrefix.getText());
+        mAccount.setDefaultQuotedTextShown(mAccountDefaultQuotedTextShown.isChecked());
         mAccount.setReplyAfterQuote(mReplyAfterQuote.isChecked());
         mAccount.setCryptoApp(mCryptoApp.getValue());
         mAccount.setCryptoAutoSignature(mCryptoAutoSignature.isChecked());
         mAccount.setLocalStorageProviderId(mLocalStorageProvider.getValue());
 
-        mAccount.setAutoExpandFolderName(reverseTranslateFolder(mAutoExpandFolder.getValue()));
+        // In webdav account we use the exact folder name also for inbox,
+        // since it varies because of internationalization
+        if (mAccount.getStoreUri().startsWith("webdav"))
+            mAccount.setAutoExpandFolderName(mAutoExpandFolder.getValue());
+        else
+            mAccount.setAutoExpandFolderName(reverseTranslateFolder(mAutoExpandFolder.getValue()));
+
         mAccount.setArchiveFolderName(mArchiveFolder.getValue());
         mAccount.setDraftsFolderName(mDraftsFolder.getValue());
         mAccount.setSentFolderName(mSentFolder.getValue());
@@ -707,6 +724,14 @@ public class AccountSettings extends K9PreferenceActivity {
             mAccount.setPushPollOnConnect(mPushPollOnConnect.isChecked());
             mAccount.setIdleRefreshMinutes(Integer.parseInt(mIdleRefreshPeriod.getValue()));
             mAccount.setMaxPushFolders(Integer.parseInt(mMaxPushFolders.getValue()));
+        }
+
+        if (!mIsMoveCapable) {
+            mAccount.setEnableMoveButtons(false);
+            mAccount.setScrollMessageViewMoveButtons(ScrollButtons.NEVER);
+        } else {
+            mAccount.setEnableMoveButtons(mAccountEnableMoveButtons.isChecked());
+            mAccount.setScrollMessageViewMoveButtons(Account.ScrollButtons.valueOf(mAccountScrollMoveButtons.getValue()));
         }
 
         boolean needsRefresh = mAccount.setAutomaticCheckIntervalMinutes(Integer.parseInt(mCheckFrequency.getValue()));
@@ -732,9 +757,7 @@ public class AccountSettings extends K9PreferenceActivity {
         }
 
         mAccount.setScrollMessageViewButtons(Account.ScrollButtons.valueOf(mAccountScrollButtons.getValue()));
-        mAccount.setScrollMessageViewMoveButtons(Account.ScrollButtons.valueOf(mAccountScrollMoveButtons.getValue()));
         mAccount.setShowPictures(Account.ShowPictures.valueOf(mAccountShowPictures.getValue()));
-        mAccount.setEnableMoveButtons(mAccountEnableMoveButtons.isChecked());
         mAccount.save(Preferences.getPreferences(this));
 
         if (needsRefresh && needsPushRestart) {
@@ -815,7 +838,7 @@ public class AccountSettings extends K9PreferenceActivity {
     }
 
     private String translateFolder(String in) {
-        if (K9.INBOX.equalsIgnoreCase(in)) {
+        if (mAccount.getInboxFolderName().equalsIgnoreCase(in)) {
             return getString(R.string.special_mailbox_name_inbox);
         } else {
             return in;
@@ -824,7 +847,7 @@ public class AccountSettings extends K9PreferenceActivity {
 
     private String reverseTranslateFolder(String in) {
         if (getString(R.string.special_mailbox_name_inbox).equals(in)) {
-            return K9.INBOX;
+            return mAccount.getInboxFolderName();
         } else {
             return in;
         }
@@ -853,12 +876,10 @@ public class AccountSettings extends K9PreferenceActivity {
 
             // TODO: In the future the call above should be changed to only return remote folders.
             // For now we just remove the Outbox folder if present.
-            Iterator<? extends Folder> iter = folders.iterator();
-            while (iter.hasNext())
-            {
+            Iterator <? extends Folder > iter = folders.iterator();
+            while (iter.hasNext()) {
                 Folder folder = iter.next();
-                if (mAccount.getOutboxFolderName().equalsIgnoreCase(folder.getName()))
-                {
+                if (mAccount.getOutboxFolderName().equals(folder.getName())) {
                     iter.remove();
                 }
             }
